@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Memory Training</title>
+
+  <style>
+    /* Background */
+    body {
+      margin: 0;
+      font-family: 'Courier New', monospace;
+      background: #6fb04f;
+      background-image: radial-gradient(#7fcb5e 20%, transparent 20%);
+      background-size: 40px 40px;
+    }
+
+    /* Main Container */
+    .container {
+      width: 85%;
+      margin: 40px auto;
+      background: #e6b88f;
+      border: 6px solid #5c3b1e;
+      border-radius: 12px;
+      box-shadow: 8px 8px 0 #3e2a17;
+      display: flex;
+      padding: 20px;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 250px;
+      border-right: 3px solid #5c3b1e;
+      padding: 20px;
+    }
+
+    .sidebar h2 {
+      margin-top: 0;
+    }
+
+    .menu-btn {
+      display: block;
+      margin: 10px 0;
+      padding: 10px;
+      border: 3px solid #5c3b1e;
+      background: #f2e2cf;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .menu-btn.active {
+      background: #f4d03f;
+    }
+
+    /* Main Content */
+    .main {
+      flex: 1;
+      padding: 20px;
+      text-align: center;
+    }
+
+    /* Header */
+    .header {
+      font-size: 28px;
+      font-weight: bold;
+      color: #8c2f1b;
+    }
+
+    /* Card Counter */
+    .counter {
+      background: #ddd;
+      padding: 10px;
+      margin: 20px 0;
+      border: 3px solid #5c3b1e;
+      font-weight: bold;
+    }
+
+    /* Flashcard */
+    .flashcard {
+      width: 70%;
+      margin: 20px auto;
+      height: 250px;
+      background: #e5e5e5;
+      border: 4px solid #5c3b1e;
+      box-shadow: 6px 6px 0 #b08968;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .flip-note {
+      position: absolute;
+      bottom: 10px;
+      right: 15px;
+      font-size: 12px;
+      color: #777;
+    }
+
+    /* Buttons */
+    .controls {
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 12px 25px;
+      margin: 10px;
+      border: 3px solid #5c3b1e;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .prev {
+      background: #e0c4a8;
+    }
+
+    .next {
+      background: #d3543c;
+      color: white;
+    }
+
+    .back {
+      background: #dcdcdc;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <div class="sidebar">
+      <h2>Teccy</h2>
+
+      <div class="menu-btn active" onclick="selectTopic('algebra', this)">Algebra</div>
+      <div class="menu-btn" onclick="selectTopic('geometry', this)">Geometry</div>
+      <div class="menu-btn" onclick="selectTopic('calculus', this)">Calculus</div>
+      <div class="menu-btn" onclick="selectTopic('probability', this)">Probability</div>
+      <div class="menu-btn" onclick="selectTopic('trigonometry', this)">Trigonometry</div>
+
+    </div>
+
+    <div class="main">
+
+      <div class="header">// MEMORY TRAINING</div>
+      <div class="counter" id="counter">CARD 1 OF 20</div>
+
+      <div class="flashcard" onclick="flipCard()" id="card">
+        Click a topic to start
+        <div class="flip-note">CLICK TO FLIP</div>
+      </div>
+
+      <div class="controls">
+        <button class="btn prev" onclick="prevCard()">[ PREV ]</button>
+        <button class="btn next" onclick="nextCard()">[ NEXT ]</button>
+        <button class="btn back" onclick="goBack()">[ BACK ]</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let flashcards = [];
+    let currentCard = 0;
+    let flipped = false;
+
+    /* --- SIMPLE SAMPLE DATA --- */
+    const formulaDatabase = {
+      /* -------- ALGEBRA -------- */
+      algebra: [
+        { q: "Linear Equation", a: "ax+b=c → x=(c-b)/a" },
+        { q: "Quadratic Formula", a: "x=[-b±√(b²-4ac)]/2a" },
+        { q: "Slope Formula", a: "m=(y2-y1)/(x2-x1)" },
+        { q: "Distance Formula", a: "√[(x2-x1)²+(y2-y1)²]" },
+        { q: "Midpoint Formula", a: "((x1+x2)/2,(y1+y2)/2)" },
+        { q: "(a+b)²", a: "a²+2ab+b²" },
+        { q: "(a-b)²", a: "a²-2ab+b²" },
+        { q: "a²-b²", a: "(a+b)(a-b)" },
+        { q: "a^m × a^n", a: "a^(m+n)" },
+        { q: "a^m / a^n", a: "a^(m-n)" },
+        { q: "(a^m)^n", a: "a^(mn)" },
+        { q: "log(ab)", a: "log a + log b" },
+        { q: "log(a/b)", a: "log a - log b" },
+        { q: "log(a^n)", a: "n log a" },
+        { q: "AP nth term", a: "a+(n-1)d" },
+        { q: "GP nth term", a: "ar^(n-1)" },
+        { q: "GP Sum", a: "a(1-r^n)/(1-r)" },
+        { q: "Common Factor", a: "ax+ay=a(x+y)" },
+        { q: "Inequality Rule", a: "Reverse sign if multiply/divide negative" },
+        { q: "Substitution", a: "Replace variable with value" }
+      ],
+
+      /* -------- GEOMETRY -------- */
+      geometry: [
+        { q: "Triangle Angle Sum", a: "180°" },
+        { q: "Quadrilateral Sum", a: "360°" },
+        { q: "Polygon Sum", a: "(n-2)×180°" },
+        { q: "Area Rectangle", a: "l×w" },
+        { q: "Area Triangle", a: "½bh" },
+        { q: "Area Circle", a: "πr²" },
+        { q: "Circumference", a: "2πr" },
+        { q: "Pythagoras", a: "a²+b²=c²" },
+        { q: "Volume Cube", a: "s³" },
+        { q: "Volume Cylinder", a: "πr²h" },
+        { q: "Volume Sphere", a: "4/3πr³" },
+        { q: "Surface Cube", a: "6s²" },
+        { q: "Surface Sphere", a: "4πr²" },
+        { q: "Complementary Angles", a: "Sum 90°" },
+        { q: "Supplementary Angles", a: "Sum 180°" },
+        { q: "Interior Angle (Regular)", a: "[(n-2)/n]×180°" },
+        { q: "Diagonal Rectangle", a: "√(l²+w²)" },
+        { q: "Arc Length", a: "(θ/360)2πr" },
+        { q: "Sector Area", a: "(θ/360)πr²" },
+        { q: "Parallel Lines", a: "Alternate angles equal" }
+      ],
+
+      /* -------- CALCULUS -------- */
+      calculus: [
+        { q: "Power Rule", a: "d/dx(xⁿ)=nxⁿ⁻¹" },
+        { q: "Derivative Constant", a: "0" },
+        { q: "Derivative eˣ", a: "eˣ" },
+        { q: "Derivative sin x", a: "cos x" },
+        { q: "Derivative cos x", a: "-sin x" },
+        { q: "Derivative tan x", a: "sec²x" },
+        { q: "Derivative ln x", a: "1/x" },
+        { q: "Product Rule", a: "u dv + v du" },
+        { q: "Quotient Rule", a: "(v du - u dv)/v²" },
+        { q: "Chain Rule", a: "f'(g(x))g'(x)" },
+        { q: "Integral xⁿ", a: "xⁿ⁺¹/(n+1)+C" },
+        { q: "Integral sin x", a: "-cos x + C" },
+        { q: "Integral cos x", a: "sin x + C" },
+        { q: "Integral eˣ", a: "eˣ + C" },
+        { q: "Limit 1/x", a: "0 as x→∞" },
+        { q: "L’Hôpital Rule", a: "Used for 0/0 or ∞/∞" },
+        { q: "Critical Point", a: "f'=0 or undefined" },
+        { q: "Second Derivative", a: "Slope change" },
+        { q: "Fundamental Theorem", a: "F(b)-F(a)" },
+        { q: "Concave Up", a: "f'' > 0" }
+      ],
+
+      /* -------- PROBABILITY -------- */
+      probability: [
+        { q: "Basic Probability", a: "favorable/total" },
+        { q: "Range of Probability", a: "0≤P(A)≤1" },
+        { q: "Independent Events", a: "P(A∩B)=P(A)P(B)" },
+        { q: "Mutually Exclusive", a: "P(A∪B)=P(A)+P(B)" },
+        { q: "Addition Rule", a: "P(A)+P(B)-P(A∩B)" },
+        { q: "Conditional Probability", a: "P(A|B)=P(A∩B)/P(B)" },
+        { q: "Permutation", a: "n!/(n-r)!" },
+        { q: "Combination", a: "n!/[r!(n-r)!]" },
+        { q: "Factorial", a: "n!=n×(n-1)!" },
+        { q: "Expected Value", a: "ΣxP(x)" },
+        { q: "Mean", a: "Σx/n" },
+        { q: "Variance", a: "Σ(x-μ)²/n" },
+        { q: "Standard Deviation", a: "√variance" },
+        { q: "Binomial Formula", a: "nCr p^r(1-p)^(n-r)" },
+        { q: "Complement Rule", a: "1-P(A)" },
+        { q: "Sample Space", a: "All possible outcomes" },
+        { q: "Event", a: "Subset of outcomes" },
+        { q: "Random Variable", a: "Numeric outcome" },
+        { q: "Bayes Theorem", a: "P(A|B)=P(B|A)P(A)/P(B)" },
+        { q: "Uniform Distribution", a: "Equal probability" }
+      ],
+
+      /* -------- TRIGONOMETRY -------- */
+      trigonometry: [
+        { q: "sin θ", a: "Opp/Hyp" },
+        { q: "cos θ", a: "Adj/Hyp" },
+        { q: "tan θ", a: "Opp/Adj" },
+        { q: "sin²θ + cos²θ", a: "1" },
+        { q: "1 + tan²θ", a: "sec²θ" },
+        { q: "1 + cot²θ", a: "csc²θ" },
+        { q: "sin 30°", a: "1/2" },
+        { q: "sin 45°", a: "√2/2" },
+        { q: "sin 60°", a: "√3/2" },
+        { q: "cos 30°", a: "√3/2" },
+        { q: "cos 45°", a: "√2/2" },
+        { q: "cos 60°", a: "1/2" },
+        { q: "tan 45°", a: "1" },
+        { q: "Double Angle sin", a: "2sinθcosθ" },
+        { q: "Double Angle cos", a: "cos²θ-sin²θ" },
+        { q: "Area Triangle (Trig)", a: "½ab sinC" },
+        { q: "Law of Sines", a: "a/sinA=b/sinB" },
+        { q: "Law of Cosines", a: "c²=a²+b²-2abcosC" },
+        { q: "Radians to Degrees", a: "×180/π" },
+        { q: "Degrees to Radians", a: "×π/180" }
+      ]
+
+    };
+
+    function selectTopic(topic, element) {
+      document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
+      element.classList.add('active');
+
+      flashcards = formulaDatabase[topic];
+      currentCard = 0;
+      flipped = false;
+      showCard();
+    }
+
+    function goBack() {
+      window.location.href = "index.html";
+    }
+
+
+    function showCard() {
+      if (!flashcards || flashcards.length === 0) return;
+      document.getElementById("card").innerHTML =
+        (flipped ? flashcards[currentCard].a : flashcards[currentCard].q)
+        + '<div class="flip-note">CLICK TO FLIP</div>';
+
+      document.getElementById("counter").innerText =
+        "CARD " + (currentCard + 1) + " OF " + flashcards.length;
+    }
+
+    function flipCard() {
+      flipped = !flipped;
+      showCard();
+    }
+
+    function nextCard() {
+      if (!flashcards.length) return;
+      currentCard = (currentCard + 1) % flashcards.length;
+      flipped = false;
+      showCard();
+    }
+
+    function prevCard() {
+      if (!flashcards.length) return;
+      currentCard = (currentCard - 1 + flashcards.length) % flashcards.length;
+      flipped = false;
+      showCard();
+    }
+  </script>
+
+</body>
+
+</html>
