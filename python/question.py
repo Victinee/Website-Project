@@ -1,28 +1,34 @@
 import streamlit as st
-import requests
 import random
 import os
 import json
 import re
+import datetime
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_ollama import OllamaLLM
+from langchain_groq import ChatGroq
 
 # ---------------------------
 # Load environment variables
 # ---------------------------
 load_dotenv()
-os.environ["LANGCHAIN_TRACING_V2"] = "false"   # disabled — no valid API key
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
 # ---------------------------
 # Streamlit page setup
 # ---------------------------
-st.set_page_config(page_title="Practice Mode - TECCY", layout="centered", page_icon="🎮")
+st.set_page_config(
+    page_title="Practice Mode - TECCY",
+    layout="centered",
+    page_icon="🎮"
+)
 
 # ---------------------------
-# Theme CSS (Stardew Valley)
+# Theme CSS
 # ---------------------------
+
+# --------------------------- Custom CSS for Stardew Valley theme ---------------------------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Jersey+10&display=swap');
@@ -149,17 +155,87 @@ header { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
+# ---------------------------
+# Back button (top-left corner)
+# ---------------------------
+st.markdown("""
+<style>
+.back-btn {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 9999;
+    background-color: #d95d45;
+    color: #fff !important;
+    font-family: 'Jersey 10', sans-serif !important;
+    font-size: 1.2rem;
+    padding: 8px 18px;
+    border: 2px solid #5e3a23;
+    border-radius: 4px;
+    box-shadow: 0 4px 0 #9e2b1e;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: all 100ms;
+}
+.back-btn:hover {
+    background-color: #ff7e60;
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #9e2b1e;
+}
+.back-btn:active {
+    transform: translateY(4px);
+    box-shadow: none;
+}
+</style>
+<a class="back-btn" href="http://localhost:8080/index.html" target="_self">🏠 Back</a>
+""", unsafe_allow_html=True)
+
 st.title("// PRACTICE MODE")
 
 # ---------------------------
-# URL params
+# URL parameters
 # ---------------------------
 topic = st.query_params.get("topic", "Algebra")
 level = st.query_params.get("level", "Beginner")
-if isinstance(topic, list): topic = topic[0] if topic else "Algebra"
-if isinstance(level, list): level = level[0] if level else "Beginner"
 
-# Level ordering
+if isinstance(topic, list):
+    topic = topic[0]
+
+if isinstance(level, list):
+    level = level[0]
+
+# ---------------------------
+# Session state
+# ---------------------------
+if "current_level" not in st.session_state:
+    st.session_state["current_level"] = level.upper()
+
+if "q_count" not in st.session_state:
+    st.session_state["q_count"] = 0
+
+if "correct_count" not in st.session_state:
+    st.session_state["correct_count"] = 0
+
+if "show_levelup" not in st.session_state:
+    st.session_state["show_levelup"] = False
+if "levelup_to" not in st.session_state:
+    st.session_state["levelup_to"] = ""
+if "target_reached" not in st.session_state:
+    st.session_state["target_reached"] = False
+if "target_level" not in st.session_state:
+    st.session_state["target_level"] = ""
+if "question_history" not in st.session_state:
+    st.session_state["question_history"] = []
+if "question_counter" not in st.session_state:
+    st.session_state["question_counter"] = 0
+
+# Derive target level from URL
+target_level_param = st.query_params.get("target", "")
+if isinstance(target_level_param, list):
+    target_level_param = target_level_param[0]
+if target_level_param and not st.session_state["target_level"]:
+    st.session_state["target_level"] = target_level_param.upper()
+
 LEVEL_ORDER = ["AMATEUR", "INTERMEDIATE", "ADVANCED", "PRO"]
 
 def next_level(lvl: str):
@@ -168,54 +244,28 @@ def next_level(lvl: str):
         idx = LEVEL_ORDER.index(lvl_up)
         if idx < len(LEVEL_ORDER) - 1:
             return LEVEL_ORDER[idx + 1]
-    return None  # already at top
-
-# ---------------------------
-# Session state initialisation
-# ---------------------------
-if "current_level" not in st.session_state:
-    st.session_state["current_level"] = level.upper()
-
-if "q_count" not in st.session_state:           # questions in current 10-block
-    st.session_state["q_count"] = 0
-if "correct_count" not in st.session_state:     # correct answers in current block
-    st.session_state["correct_count"] = 0
-if "show_levelup" not in st.session_state:      # trigger level-up popup
-    st.session_state["show_levelup"] = False
-if "levelup_to" not in st.session_state:        # what level the user just reached
-    st.session_state["levelup_to"] = ""
-if "target_reached" not in st.session_state:   # user reached their target level
-    st.session_state["target_reached"] = False
-if "target_level" not in st.session_state:
-    st.session_state["target_level"] = ""       # filled from URL later
-
-# Derive target level from URL (stored in Supabase but exposed via query param for now)
-target_level_param = st.query_params.get("target", "")
-if isinstance(target_level_param, list): target_level_param = target_level_param[0]
-if target_level_param and not st.session_state["target_level"]:
-    st.session_state["target_level"] = target_level_param.upper()
+    return None
 
 current_lvl = st.session_state["current_level"]
 
 # ---------------------------
-# Navigation sidebar
+# Sidebar
 # ---------------------------
 st.sidebar.markdown("### [ NAVIGATION ]")
 st.sidebar.markdown("[🏠 Back to Homepage](http://localhost:8080/index.html)")
 st.sidebar.markdown("---")
 
 # ---------------------------
-# Model selector (default phi3 which is installed)
+# Model Setup (Groq API)
 # ---------------------------
-st.sidebar.markdown("### [ MODEL SELECT ]")
-model_choice = st.sidebar.selectbox("Select Model", ["phi3:3.8b", "llama3.2:1b"], index=0)
-st.sidebar.markdown(f"**Active:** `{model_choice}`")
-if "phi3" in model_choice:
-    st.sidebar.info("🧠 REASON MODE")
-else:
-    st.sidebar.success("⚡ FAST MODE")
+st.sidebar.markdown("### [ MODEL ]")
+st.sidebar.success("⚡ Groq Llama 3.1 (FREE & FAST)")
 
-llm = OllamaLLM(model=model_choice, temperature=0.3, num_ctx=2048)
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    temperature=0.7,
+    max_tokens=4096
+)
 
 # ---------------------------
 # Progress display
@@ -230,16 +280,13 @@ st.markdown(
     f"📊 **Block progress:** {ok_in_block}/{q_in_block} correct "
     f"({acc_pct}% accuracy) | 🔢 {remaining} question(s) left in this block"
 )
-# Draw accuracy bar
 st.markdown(
     f'<div class="acc-bar-bg"><div class="acc-bar-fill" style="width:{acc_pct}%;"></div></div>',
     unsafe_allow_html=True
 )
 st.caption("Need 75%+ over 10 questions to level up 🌱")
 
-# ---------------------------
-# 🎉 LEVEL-UP POPUP
-# ---------------------------
+# --------------------------- 🎉 LEVEL-UP POPUP ---------------------------
 if st.session_state["show_levelup"]:
     new_lvl  = st.session_state["levelup_to"]
     seed_map = {
@@ -255,7 +302,6 @@ if st.session_state["show_levelup"]:
         <p>You answered with 75%+ accuracy over 10 questions — amazing work!</p>
         <br>
         <p>🎁 <strong>Reward unlocked:</strong></p>
-        <!-- PLACEHOLDER: replace the box below with an actual fertilizer image -->
         <div style="width:90px;height:90px;border:3px dashed #5e3a23;border-radius:8px;
                     margin:0 auto 12px;display:flex;align-items:center;justify-content:center;
                     background:#fff8eb;font-size:3rem;">
@@ -269,11 +315,9 @@ if st.session_state["show_levelup"]:
     if st.button("✅ AWESOME! KEEP GOING"):
         st.session_state["show_levelup"] = False
         st.rerun()
-    st.stop()   # don't show rest of UI while popup is visible
+    st.stop()
 
-# ---------------------------
-# 🏆 TARGET LEVEL REACHED
-# ---------------------------
+# --------------------------- 🏆 TARGET LEVEL REACHED ---------------------------
 if st.session_state["target_reached"]:
     tgt = st.session_state["target_level"] or current_lvl
     st.markdown(f"""
@@ -301,69 +345,90 @@ if st.session_state["target_reached"]:
     st.stop()
 
 # ---------------------------
-# Parse JSON helper (robust — handles markdown fences, extra text, phi3 quirks)
+# JSON Parser
 # ---------------------------
 def parse_json_output(model_output: str):
-    """Try multiple strategies to extract JSON from the model response."""
     if not model_output:
         return None
-
     text = model_output.strip()
-
-    # Strategy 1: Strip markdown code fences (```json ... ``` or ``` ... ```)
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if fence_match:
         text = fence_match.group(1)
-
-    # Strategy 2: Direct parse if it looks like JSON already
-    if text.startswith("{"):
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-
-    # Strategy 3: Extract first {...} block (handles text before/after JSON)
+    try:
+        return json.loads(text)
+    except:
+        pass
     brace_match = re.search(r"\{.*\}", text, re.DOTALL)
     if brace_match:
-        candidate = brace_match.group(0)
-        # Fix trailing commas (common phi3 quirk): ,} → }  and ,] → ]
-        candidate = re.sub(r",\s*}", "}", candidate)
-        candidate = re.sub(r",\s*]", "]", candidate)
         try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
+            return json.loads(brace_match.group(0))
+        except:
             pass
-
-    # Strategy 4: Line-by-line extraction fallback
-    lines = text.splitlines()
-    json_lines = []
-    in_json = False
-    brace_depth = 0
-    for line in lines:
-        if not in_json and "{" in line:
-            in_json = True
-        if in_json:
-            json_lines.append(line)
-            brace_depth += line.count("{") - line.count("}")
-            if in_json and brace_depth <= 0:
-                break
-    if json_lines:
-        candidate = "\n".join(json_lines)
-        candidate = re.sub(r",\s*}", "}", candidate)
-        candidate = re.sub(r",\s*]", "]", candidate)
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            pass
-
     return None
 
+# ---------------------------
+# Helper: unique question params
+# ---------------------------
+def generate_unique_question_params(topic, level, question_counter, history):
+    timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
+
+    topic_variations = {
+        "Algebra": ["linear equations", "quadratic equations", "systems of equations", "polynomial functions", "rational expressions", "inequalities", "absolute value", "exponential functions"],
+        "Geometry": ["triangles", "circles", "polygons", "coordinate geometry", "transformations", "area and perimeter", "volume", "trigonometry"],
+        "Calculus": ["limits", "derivatives", "integrals", "differential equations", "series", "multivariable calculus", "optimization", "rates of change"],
+        "Probability": ["combinatorics", "probability distributions", "expected value", "conditional probability", "bayesian statistics", "random variables", "sampling"],
+        "Trigonometry": ["right triangles", "unit circle", "trigonometric identities", "inverse functions", "law of sines/cosines", "polar coordinates"]
+    }
+
+    problem_types = ["word problem", "pure calculation", "proof-style", "geometric construction", "optimization problem", "real-world application", "theoretical question", "comparison problem"]
+    difficulty_modifiers = ["basic", "intermediate", "advanced", "challenging", "complex", "multi-step", "conceptual", "application-based"]
+
+    subtopic = random.choice(topic_variations.get(topic, [topic]))
+    problem_type = random.choice(problem_types)
+    difficulty_mod = random.choice(difficulty_modifiers)
+    approach = random.choice(['algebraic', 'geometric', 'numerical', 'analytical', 'graphical', 'logical', 'intuitive'])
+
+    constraints = []
+    if random.random() > 0.5:
+        constraints.append(f"must involve {random.choice(['positive numbers', 'negative numbers', 'fractions', 'decimals', 'integers', 'real numbers'])}")
+    if random.random() > 0.6:
+        constraints.append(f"include {random.choice(['a diagram', 'a table', 'multiple variables', 'a system', 'a sequence', 'a function'])}")
+    if random.random() > 0.7:
+        constraints.append(f"focus on {random.choice(['accuracy', 'efficiency', 'generalization', 'proof', 'application', 'understanding'])}")
+
+    unique_id = f"{random.randint(10000000, 99999999)}-{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.randint(10,99)}"
+
+    prompt_parts = [
+        f"Generate a unique {level} level {topic} question",
+        f"specifically about {subtopic}",
+        f"as a {problem_type}",
+        f"with {difficulty_mod} difficulty",
+        f"using a {approach} approach",
+    ]
+
+    if constraints:
+        prompt_parts.append(f"Additional constraints: {', '.join(constraints)}")
+
+    prompt_parts.extend([
+        f"This is question #{question_counter + 1} in this session",
+        f"Timestamp: {timestamp}",
+        f"Unique session ID: {unique_id}",
+        f"Ensure this question is completely different from any previous questions"
+    ])
+
+    if history:
+        prompt_parts.append(f"Previous question themes to avoid: {', '.join(history[-3:])}")
+
+    return ". ".join(prompt_parts) + "."
 
 # ---------------------------
 # Generate Question
 # ---------------------------
-st.markdown("---")
 if st.button("[ GENERATE QUESTION ]"):
+    unique_prompt = generate_unique_question_params(
+        topic, current_lvl, st.session_state.get("question_counter", 0), st.session_state.get("question_history", [])
+    )
+
     question_prompt = ChatPromptTemplate.from_messages([
         ("system",
          """You are an expert math teacher. Generate ONE {level} level math problem from: {topic}.
@@ -381,7 +446,7 @@ Respond STRICTLY in this JSON format with NO extra text:
 }}
 Make the solution_steps very detailed and educational — each step should explain WHY not just WHAT."""
         ),
-        ("user", f"Generate a unique {level} {topic} question. Seed: {random.randint(1, 999999)}")
+        ("user", unique_prompt)
     ])
 
     chain = question_prompt | llm | StrOutputParser()
@@ -389,10 +454,6 @@ Make the solution_steps very detailed and educational — each step should expla
     with st.spinner("GENERATING..."):
         try:
             qa_json = chain.invoke({"topic": topic, "level": current_lvl})
-        except requests.exceptions.ConnectionError:
-            st.error("❌ CONNECTION ERROR: Could not connect to Ollama.")
-            st.warning("Make sure Ollama is running: `ollama serve`")
-            st.stop()
         except Exception as e:
             st.error(f"❌ ERROR: {e}")
             st.stop()
@@ -403,7 +464,19 @@ Make the solution_steps very detailed and educational — each step should expla
         st.session_state["correct_answer"]    = qa_data.get("answer", "")
         st.session_state["solution_steps"]    = qa_data.get("solution_steps", [])
         st.session_state["key_concept"]       = qa_data.get("key_concept", "")
-        st.session_state["answer_checked"]    = False   # reset check state
+        st.session_state["answer_checked"]    = False
+        st.session_state["question_counter"]  = st.session_state.get("question_counter", 0) + 1
+
+        question_text = qa_data.get("question", "").lower()
+        theme_keywords = []
+        for word in question_text.split():
+            if len(word) > 4 and word not in ['that', 'with', 'this', 'what', 'find', 'solve', 'calculate', 'given', 'show']:
+                theme_keywords.append(word)
+        if theme_keywords:
+            theme = " ".join(theme_keywords[:3])
+            hist = st.session_state.get("question_history", [])
+            hist.append(theme)
+            st.session_state["question_history"] = hist[-10:]
     else:
         st.error("⚠️ Unexpected response format — try again.")
         st.text(qa_json)
@@ -426,20 +499,17 @@ if "current_question" in st.session_state:
             given   = user_answer.strip().lower()
             is_correct = given == correct
 
-            # ── Track accuracy ──
-            st.session_state["q_count"]     += 1
+            st.session_state["q_count"] += 1
             if is_correct:
                 st.session_state["correct_count"] += 1
             st.session_state["answer_checked"] = True
 
-            # ── Show result ──
             if is_correct:
                 st.success("✅ CORRECT! Well done!")
             else:
                 st.error(f"❌ WRONG.  Correct answer: **{st.session_state['correct_answer']}**")
 
-            # ── Detailed step-by-step solution ──
-            steps = st.session_state.get("solution_steps", [])
+            steps   = st.session_state.get("solution_steps", [])
             concept = st.session_state.get("key_concept", "")
 
             if steps:
@@ -449,7 +519,6 @@ if "current_question" in st.session_state:
                 if concept:
                     st.info(f"💡 **Key Concept:** {concept}")
             else:
-                # Fallback: ask the model for a solution if not provided
                 st.subheader("// SOLUTION")
                 solve_prompt = ChatPromptTemplate.from_messages([
                     ("system",
@@ -475,14 +544,12 @@ Format: numbered list, plain text only, no JSON."""
                 st.subheader("// BLOCK COMPLETE (10 QUESTIONS)")
 
                 if block_acc >= 0.75:
-                    # Level up!
                     nxt = next_level(current_lvl)
                     if nxt:
                         st.session_state["current_level"]  = nxt
                         st.session_state["levelup_to"]     = nxt
                         st.session_state["show_levelup"]   = True
 
-                        # Check if target reached
                         tgt = st.session_state.get("target_level", "")
                         if tgt and nxt == tgt:
                             st.session_state["target_reached"] = True
@@ -495,8 +562,7 @@ Format: numbered list, plain text only, no JSON."""
                         f"Keep practising at **{current_lvl}**!"
                     )
 
-                # Reset block counter for next round
-                st.session_state["q_count"]     = 0
+                st.session_state["q_count"]       = 0
                 st.session_state["correct_count"] = 0
 
                 if not st.session_state["show_levelup"] and not st.session_state["target_reached"]:
