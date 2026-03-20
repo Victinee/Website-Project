@@ -380,21 +380,27 @@ def generate_unique_question_params(topic, level, question_counter, history):
         "Trigonometry": ["right triangles", "unit circle", "trigonometric identities", "inverse functions", "law of sines/cosines", "polar coordinates"]
     }
 
-    problem_types = ["word problem", "pure calculation", "proof-style", "geometric construction", "optimization problem", "real-world application", "theoretical question", "comparison problem"]
-    difficulty_modifiers = ["basic", "intermediate", "advanced", "challenging", "complex", "multi-step", "conceptual", "application-based"]
+    problem_types = ["word problem", "pure calculation", "real-world application", "comparison problem", "multi-step problem"]
+
+    # Use level-specific difficulty guidance (NOT random modifiers that override level)
+    level_difficulty_map = {
+        "AMATEUR":       "very simple, single-step, uses only basic arithmetic or simple definitions, no complex formulas",
+        "BEGINNER":      "simple, 1-2 steps, uses basic formulas directly, no manipulation required",
+        "INTERMEDIATE":  "moderate, 2-4 steps, requires applying a formula with some algebraic manipulation",
+        "ADVANCED":      "challenging, 4-6 steps, requires combining multiple concepts or multi-step reasoning",
+        "PRO":           "hard, 5+ steps, requires deep understanding, multiple concept combinations, and non-obvious reasoning",
+    }
+    difficulty_guidance = level_difficulty_map.get(level.upper(), "appropriate for the stated level")
 
     subtopic = random.choice(topic_variations.get(topic, [topic]))
     problem_type = random.choice(problem_types)
-    difficulty_mod = random.choice(difficulty_modifiers)
-    approach = random.choice(['algebraic', 'geometric', 'numerical', 'analytical', 'graphical', 'logical', 'intuitive'])
+    approach = random.choice(['algebraic', 'geometric', 'numerical', 'analytical', 'logical'])
 
     constraints = []
     if random.random() > 0.5:
-        constraints.append(f"must involve {random.choice(['positive numbers', 'negative numbers', 'fractions', 'decimals', 'integers', 'real numbers'])}")
-    if random.random() > 0.6:
-        constraints.append(f"include {random.choice(['a diagram', 'a table', 'multiple variables', 'a system', 'a sequence', 'a function'])}")
+        constraints.append(f"must involve {random.choice(['positive numbers', 'fractions', 'integers', 'real numbers'])}")
     if random.random() > 0.7:
-        constraints.append(f"focus on {random.choice(['accuracy', 'efficiency', 'generalization', 'proof', 'application', 'understanding'])}")
+        constraints.append(f"focus on {random.choice(['understanding', 'application', 'accuracy'])}")
 
     unique_id = f"{random.randint(10000000, 99999999)}-{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.randint(10,99)}"
 
@@ -402,7 +408,7 @@ def generate_unique_question_params(topic, level, question_counter, history):
         f"Generate a unique {level} level {topic} question",
         f"specifically about {subtopic}",
         f"as a {problem_type}",
-        f"with {difficulty_mod} difficulty",
+        f"DIFFICULTY: {difficulty_guidance}",
         f"using a {approach} approach",
     ]
 
@@ -431,7 +437,17 @@ if st.button("[ GENERATE QUESTION ]"):
 
     question_prompt = ChatPromptTemplate.from_messages([
         ("system",
-         """You are an expert math teacher. Generate ONE {level} level math problem from: {topic}.
+         """You are an expert math teacher. Generate ONE math problem strictly matching the given level:
+
+LEVEL RULES (MUST follow exactly):
+- AMATEUR: Very simple. 1 step. Basic arithmetic or definition recall only. No formulas. Example difficulty: "What is 15/40 as a fraction?"
+- BEGINNER: Simple. 1-2 steps. Direct formula application. No algebraic manipulation. Example: "Find the area of a circle with radius 3."
+- INTERMEDIATE: Moderate. 2-4 steps. Apply formula + some manipulation. Example: "Solve 2x² + 5x + 3 = 0"
+- ADVANCED: Challenging. 4-6 steps. Multiple concepts. Non-obvious approach. Example: "Find the derivative of sin(x²)·ln(x)"
+- PRO: Hard. 5+ steps. Deep understanding. Multi-concept combinations. Proof or advanced application required.
+
+Topic: {topic} | Level: {level}
+
 Respond STRICTLY in this JSON format with NO extra text:
 {{
   "question": "full problem statement",

@@ -114,10 +114,24 @@ function levelModalDoneKey(userId) {
 
 async function checkLevelModal() {
   if (!_currentUserId) return;
-  const done = localStorage.getItem(levelModalDoneKey(_currentUserId));
-  if (!done) {
-    initLevelModal();
-  }
+  const doneKey = levelModalDoneKey(_currentUserId);
+  const done = localStorage.getItem(doneKey);
+  if (done) return; // already completed — never show again
+
+  // One-time migration: if returning user already has Supabase progress,
+  // silently mark them as done so the modal never interrupts them again.
+  try {
+    if (typeof loadAllProgressFromSupabase === 'function') {
+      const allProgress = await loadAllProgressFromSupabase();
+      if (allProgress && allProgress.length > 0) {
+        localStorage.setItem(doneKey, '1');
+        return; // existing user — skip modal
+      }
+    }
+  } catch (e) { /* ignore — fall through to show modal for truly new users */ }
+
+  // Genuinely new user with no progress — show the level modal
+  initLevelModal();
 }
 
 function initLevelModal() {
@@ -278,6 +292,12 @@ async function logStreakActivity() {
   if (row.last_activity === today) return; // already credited today
 
   const newDone = (row.streak_done || 0) + 1;
+
+  // 🌿 Every 5 consecutive days → award 1 fertilizer
+  if (newDone % 5 === 0) {
+    addToWarehouse('🌿', `Fertilizer — ${newDone}-Day Streak Reward!`);
+    setTimeout(() => alert(`🌿 ${newDone}-Day Streak! You earned a Fertilizer!\nCheck your Warehouse!`), 300);
+  }
 
   if (newDone >= row.streak_goal) {
     // 🎉 Streak complete — award seed, reset, prompt for new goal
@@ -585,10 +605,11 @@ function resetAllProgress() {
 async function logout() {
   if (confirm('Are you sure you want to logout?')) {
     try {
+      // Preserve levelSetup keys so the level modal never re-triggers after logout
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (!key.startsWith('sb-')) {
+        if (!key.startsWith('sb-') && !key.startsWith('levelSetup_')) {
           keysToRemove.push(key);
         }
       }
@@ -635,8 +656,8 @@ window.addEventListener('load', async () => {
       showWelcomeModal(newName);
       // Level modal will show after user closes welcome (closeWelcomeModal → checkLevelModal)
     } else {
-      // ── Feature 2: level modal only if not yet done for this user ──
-      checkLevelModal();
+      // Returning user — level modal is only for first signup, so do NOT call checkLevelModal() here.
+      // The levelSetup key is preserved across logouts to prevent re-triggering.
     }
 
     // ── Feature 3: streak modal — check Supabase user_streaks row ──
