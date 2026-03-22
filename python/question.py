@@ -187,7 +187,7 @@ st.markdown("""
     box-shadow: none;
 }
 </style>
-<a class="back-btn" href="http://localhost:8080/index.html" target="_self">🏠 Back</a>
+<a class="back-btn" href="http://localhost:8080/math.py/math.py/index.html" target="_self">🏠 Back</a>
 """, unsafe_allow_html=True)
 
 st.title("// PRACTICE MODE")
@@ -252,7 +252,7 @@ current_lvl = st.session_state["current_level"]
 # Sidebar
 # ---------------------------
 st.sidebar.markdown("### [ NAVIGATION ]")
-st.sidebar.markdown("[🏠 Back to Homepage](http://localhost:8080/index.html)")
+st.sidebar.markdown("[🏠 Back to Homepage](http://localhost:8080/math.py/math.py/index.html)")
 st.sidebar.markdown("---")
 
 # ---------------------------
